@@ -30,7 +30,7 @@ import yaml
 from collections import defaultdict
 from wekws.model.kws_model import init_model
 from wekws.utils.checkpoint import load_checkpoint
-from tools.make_list import query_token_set, read_lexicon, read_token
+from wenet.text.char_tokenizer import CharTokenizer
 
 
 def get_args():
@@ -275,12 +275,11 @@ class KeyWordSpotter(torch.nn.Module):
         self.model = model.to(device)
         self.model.eval()
         logging.info(f'model {ckpt_path} loaded.')
-        self.token_table = read_token(token_path)
-        logging.info(f'tokens {token_path} with '
-                     f'{len(self.token_table)} units loaded.')
-        self.lexicon_table = read_lexicon(lexicon_path)
-        logging.info(f'lexicons {lexicon_path} with '
-                     f'{len(self.lexicon_table)} units loaded.')
+        self.tokenizer = CharTokenizer(token_path, lexicon_path,
+                                        unk='<filler>',
+                                        split_with_space=True)
+        logging.info(f'tokenizer loaded with token={token_path}, '
+                     f'lexicon={lexicon_path}.')
         self.in_cache = torch.zeros(0, 0, 0, dtype=torch.float)
 
         # decoding and detection related
@@ -313,8 +312,9 @@ class KeyWordSpotter(torch.nn.Module):
         keywords_strset = {'<blk>'}
         keywords_tokenmap = {'<blk>': 0}
         for keyword in keywords_list:
-            strs, indexes = query_token_set(keyword, self.token_table,
-                                            self.lexicon_table)
+            strs, indexes = self.tokenizer.tokenize(
+                ' '.join(list(keyword)))
+            indexes = tuple(indexes)
             keywords_token[keyword] = {}
             keywords_token[keyword]['token_id'] = indexes
             keywords_token[keyword]['token_str'] = ''.join('%s ' % str(i)
